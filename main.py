@@ -1,106 +1,76 @@
-import os, random, math, numpy as np
-from google import genai
-from gtts import gTTS
-from PIL import Image, ImageDraw
-from moviepy.editor import AudioFileClip, VideoClip, CompositeVideoClip, TextClip
+import os, requests, random, textwrap
+from PIL import Image
+from moviepy.editor import ImageClip, TextClip, CompositeVideoClip, concatenate_videoclips
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-from google.oauth2.credentials import Credentials
+import google.generativeai as genai
 
-client = genai.Client()
+# --- KEYS ---
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+FIREFLY_CLIENT_ID = os.getenv("FIREFLY_CLIENT_ID")
+FIREFLY_CLIENT_SECRET = os.getenv("FIREFLY_CLIENT_SECRET")
+YT_CLIENT_ID = os.getenv("YT_CLIENT_ID")
+YT_CLIENT_SECRET = os.getenv("YT_CLIENT_SECRET")
+YT_REFRESH_TOKEN = os.getenv("YT_REFRESH_TOKEN")
 
-# 1. TRENDING
-trending = random.choice(["ISRO ka naya mission", "Virat Kohli ka record", "AI ne duniya badal di", "Gaon me hua chamatkar", "Paisa hi sab kuch hai?", "Dost ne dhoka de diya"])
-print(f"Trending: {trending}")
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
-# 2. SCRIPT - Maudaha ka Bagad Billa style
-prompt = f"""
-Trending: {trending}
-Maudaha ka Bagad Billa style me 30 sec ki emotional Hindi script banao.
-Character Bagad Billa camera se baat kar raha hai.
-Pehle 2 sec me Hook: 'Bhai ruk ja...'
-Script 70 words, dil ko chhu jaye.
-Format:
-TITLE: [title]
-SCRIPT: [script]
-"""
-res = client.models.generate_content(model='gemini-1.5-flash',contents=prompt).text
-title = "Bhai Ruk Ja Ye Sun Le!"
-script = res
-try:
-    title = res.split("TITLE:")[1].split("SCRIPT:")[0].strip()
-    script = res.split("SCRIPT:")[1].strip()
-except: pass
+def get_trending_funny_topic():
+    prompt = """Aaj India me YouTube Shorts pe kya trending funny topic hai?
+    Usi trending topic ko Maudaha ke Bagad Billa se jod ke 1 funny line de.
+    Example: 'Neeraj Chopra ka gold' -> 'Bagad Billa ne bhala phenk ke Maudaha ki light tod di'
+    Sirf 1 line de, 15 shabd me."""
+    res = model.generate_content(prompt)
+    return res.text.strip()
 
-open("title.txt","w",encoding="utf-8").write(title)
-open("desc.txt","w",encoding="utf-8").write(f"{title}\n\n{script}\n\n#MaudahaKaBagadBilla #Shorts")
-open("current_script.txt","w",encoding="utf-8").write(script)
+def get_adobe_token():
+    url = "https://ims-na1.adobelogin.com/ims/token/v3"
+    data = {"grant_type": "client_credentials", "client_id": FIREFLY_CLIENT_ID, "client_secret": FIREFLY_CLIENT_SECRET, "scope": "openid,AdobeID,firefly_api,ff_apis"}
+    r = requests.post(url, data=data)
+    return r.json()["access_token"]
 
-# 3. VOICE - Free
-tts = gTTS(text=script, lang='hi', slow=False)
-tts.save("voice.mp3")
-audio = AudioFileClip("voice.mp3")
-duration = audio.duration + 0.5
+def generate_firefly_image(prompt, token, filename):
+    url = "https://firefly-api.adobe.io/v2/images/generate"
+    headers = {"Authorization": f"Bearer {token}", "x-api-key": FIREFLY_CLIENT_ID, "Content-Type": "application/json"}
+    payload = {"prompt": prompt + ", funny animated style, cartoon cat, Bundelkhandi gamcha, 4k, vibrant", "size": {"width": 1280, "height": 720}}
+    r = requests.post(url, headers=headers, json=payload)
+    img_url = r.json()["outputs"][0]["image"]["url"]
+    with open(filename, "wb") as f:
+        f.write(requests.get(img_url).content)
+    return filename
 
-# 4. FREE ANIMATION - Yahi Maudaha wala jugaad hai
-# Tumhe ek baar apni Bagad Billa ki photo ko GitHub me 'character.png' naam se upload karna hai
-# Agar nahi hai to ye code khud ek cartoon bana dega
-try:
-    base_img = Image.open("character.png").convert("RGB").resize((800, 800))
-except:
-    # Fallback - Agar photo nahi mili to ek aag ka gola bana do
-    base_img = Image.new("RGB", (800, 800), (20, 20, 40))
-    d = ImageDraw.Draw(base_img)
-    d.ellipse([150, 150, 650, 650], fill=(255, 150, 0), outline=(255, 220, 0), width=10)
-    # Aankh
-    d.ellipse([280, 300, 350, 380], fill=(255,255,255))
-    d.ellipse([450, 300, 520, 380], fill=(255,255,255))
-    d.ellipse([305, 330, 335, 360], fill=(0,0,0))
-    d.ellipse([475, 330, 505, 360], fill=(0,0,0))
+def make_animated_video(topic):
+    token = get_adobe_token()
+    
+    # 3 alag scene banayenge
+    prompts = [f"{topic} scene 1", f"{topic} scene 2 funny reaction", f"{topic} scene 3 climax"]
+    clips = []
+    for i, p in enumerate(prompts):
+        img_path = generate_firefly_image(p, token, f"scene_{i}.jpg")
+        # Animated effect - Ken Burns zoom
+        clip = ImageClip(img_path).set_duration(3)
+        clip = clip.resize(lambda t: 1 + 0.1*t)  # Zoom animation
+        clips.append(clip)
 
-W, H = 1080, 1920
-# Background - Gaon jaisa
-bg = Image.new("RGB", (W, H), (30, 80, 30))
-bg_draw = ImageDraw.Draw(bg)
-bg_draw.rectangle([0, 1400, W, H], fill=(120, 70, 20)) # Zameen
+    full_clip = concatenate_videoclips(clips)
+    
+    # Funny animated text
+    txt = TextClip(topic, fontsize=70, color='yellow', font='Arial-Bold', stroke_color='black', stroke_width=3, method='caption', size=(1000, None))
+    txt = txt.set_position(('center','bottom')).set_duration(9)
+    
+    final = CompositeVideoClip([full_clip, txt])
+    final.write_videofile("final_video.mp4", fps=24)
+    return "final_video.mp4"
 
-def make_frame(t):
-    frame = bg.copy()
-    # Character hilna - upar neeche (Body Bob)
-    bob = int(math.sin(t * 4) * 15)
-    # Muh khulna-band hona - jab voice chal rahi hai
-    mouth_open = int(abs(math.sin(t * 8)) * 30) if t < duration - 0.5 else 5
-    # Aankh jhapakna - har 3 sec me
-    blink = 1 if (t % 3) < 0.15 else 0
+def upload_to_youtube(path, title):
+    creds = Credentials(None, refresh_token=YT_REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=YT_CLIENT_ID, client_secret=YT_CLIENT_SECRET, scopes=["https://www.googleapis.com/auth/youtube.upload"])
+    youtube = build("youtube", "v3", credentials=creds)
+    youtube.videos().insert(part="snippet,status", body={"snippet": {"title": f"{title} | Bagad Billa Funny", "description": f"{title}\n#trending #funny #maudaha #bagadbilla", "categoryId": "23"}, "status": {"privacyStatus": "public"}}, media_body=MediaFileUpload(path)).execute()
 
-    char = base_img.copy()
-    # Muh banao - character ke neeche
-    draw = ImageDraw.Draw(char)
-    # Muh ko mita kar naya muh banao
-    draw.ellipse([320, 550, 480, 550 + mouth_open + 10], fill=(0,0,0))
-    if blink:
-        draw.rectangle([280, 300, 520, 380], fill=(255,150,0)) # Aankh band
-
-    # Character ko frame me chipkao
-    frame.paste(char, (140, 600 + bob))
-    # Upar Title
-    return np.array(frame)
-
-video = VideoClip(make_frame, duration=duration)
-# Title Text
-txt = TextClip(title, fontsize=65, color='yellow', size=(950, None), method='caption', align='center', font='DejaVu-Sans-Bold')
-txt = txt.set_position(('center', 200)).set_duration(duration)
-# Neeche Subscribe
-sub = TextClip("SUBSCRIBE KARO 👇", fontsize=55, color='white', font='DejaVu-Sans-Bold')
-sub = sub.set_position(('center', 1750)).set_duration(duration)
-
-final = CompositeVideoClip([video, txt, sub]).set_audio(audio)
-final.write_videofile("final_video.mp4", fps=24, codec="libx264", audio_codec="aac")
-print("Free Animated Video Ban Gayi!")
-
-# 5. YOUTUBE UPLOAD - Free
-creds = Credentials(None, refresh_token=os.getenv("YT_REFRESH_TOKEN"), token_uri='https://oauth2.googleapis.com/token', client_id=os.getenv("YT_CLIENT_ID"), client_secret=os.getenv("YT_CLIENT_SECRET"), scopes=['https://www.googleapis.com/auth/youtube.upload'])
-youtube = build('youtube','v3', credentials=creds)
-body = {"snippet": {"title": title, "description": open("desc.txt").read(), "tags": ["MaudahaKaBagadBilla","Shorts"], "categoryId": "22"}, "status": {"privacyStatus": "public"}}
-youtube.videos().insert(part="snippet,status", body=body, media_body=MediaFileUpload("final_video.mp4")).execute()
-print("Upload Ho Gaya!")
+if __name__ == "__main__":
+    topic = get_trending_funny_topic()
+    print(f"TRENDING TOPIC: {topic}")
+    video = make_animated_video(topic)
+    upload_to_youtube(video, topic)
