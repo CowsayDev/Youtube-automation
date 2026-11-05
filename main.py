@@ -24,7 +24,7 @@ Format:
 TITLE: [title]
 SCRIPT: [script]
 """
-res = client.models.generate\_content(model='gemini-1.5-flash',contents=prompt).text
+res = client.models.generate_content(model='gemini-1.5-flash',contents=prompt).text
 title = "Bhai Ruk Ja Ye Sun Le!"
 script = res
 try:
