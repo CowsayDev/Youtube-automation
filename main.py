@@ -1,5 +1,5 @@
 import os, random, math, numpy as np
-import google.generativeai as genai
+from google import genai
 from gtts import gTTS
 from PIL import Image, ImageDraw
 from moviepy.editor import AudioFileClip, VideoClip, CompositeVideoClip, TextClip
@@ -7,8 +7,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-1.5-flash')
+client = genai.Client()
 
 # 1. TRENDING
 trending = random.choice(["ISRO ka naya mission", "Virat Kohli ka record", "AI ne duniya badal di", "Gaon me hua chamatkar", "Paisa hi sab kuch hai?", "Dost ne dhoka de diya"])
@@ -25,7 +24,7 @@ Format:
 TITLE: [title]
 SCRIPT: [script]
 """
-res = model.generate_content(prompt).text
+res = client.models.generate\_content(model='gemini-1.5-flash',contents=prompt).text
 title = "Bhai Ruk Ja Ye Sun Le!"
 script = res
 try:
