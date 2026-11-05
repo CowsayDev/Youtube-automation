@@ -1,9 +1,9 @@
-google-generativeai
-gTTS
+Pillow
 moviepy==1.0.3
+requests
 google-api-python-client
 google-auth
-Pillow
-numpy
-google-genai
 google-auth-oauthlib
+numpy
+imageio==2.31.1
+imageio-ffmpeg==0.4.8
