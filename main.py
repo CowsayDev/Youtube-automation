@@ -1,76 +1,75 @@
-import os, requests, random, textwrap
-from PIL import Image
-from moviepy.editor import ImageClip, TextClip, CompositeVideoClip, concatenate_videoclips
+import os
+import time
+import google.generativeai as genai
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-import google.generativeai as genai
 
-# --- KEYS ---
+# --- KEYS - naam bilkul CAPITAL me ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-FIREFLY_CLIENT_ID = os.getenv("FIREFLY_CLIENT_ID")
-FIREFLY_CLIENT_SECRET = os.getenv("FIREFLY_CLIENT_SECRET")
 YT_CLIENT_ID = os.getenv("YT_CLIENT_ID")
 YT_CLIENT_SECRET = os.getenv("YT_CLIENT_SECRET")
 YT_REFRESH_TOKEN = os.getenv("YT_REFRESH_TOKEN")
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
 
-def get_trending_funny_topic():
-    prompt = """Aaj India me YouTube Shorts pe kya trending funny topic hai?
-    Usi trending topic ko Maudaha ke Bagad Billa se jod ke 1 funny line de.
-    Example: 'Neeraj Chopra ka gold' -> 'Bagad Billa ne bhala phenk ke Maudaha ki light tod di'
-    Sirf 1 line de, 15 shabd me."""
+# --- TUNE JO BOLA WAHI MODEL ---
+# Video Generation Model
+VIDEO_MODEL_NAME = "gemini-omni-1.1-flash"
+TEXT_MODEL_NAME = "gemini-omni-1.1-flash"
+
+def get_topic():
+    model = genai.GenerativeModel(TEXT_MODEL_NAME)
+    prompt = "Maudaha ke Bagad Billa ke liye 1 trending funny YouTube Shorts topic de, 15 shabd me, Bundelkhandi desi comedy. Sirf topic."
     res = model.generate_content(prompt)
     return res.text.strip()
 
-def get_adobe_token():
-    url = "https://ims-na1.adobelogin.com/ims/token/v3"
-    data = {"grant_type": "client_credentials", "client_id": FIREFLY_CLIENT_ID, "client_secret": FIREFLY_CLIENT_SECRET, "scope": "openid,AdobeID,firefly_api,ff_apis"}
-    r = requests.post(url, data=data)
-    return r.json()["access_token"]
-
-def generate_firefly_image(prompt, token, filename):
-    url = "https://firefly-api.adobe.io/v2/images/generate"
-    headers = {"Authorization": f"Bearer {token}", "x-api-key": FIREFLY_CLIENT_ID, "Content-Type": "application/json"}
-    payload = {"prompt": prompt + ", funny animated style, cartoon cat, Bundelkhandi gamcha, 4k, vibrant", "size": {"width": 1280, "height": 720}}
-    r = requests.post(url, headers=headers, json=payload)
-    img_url = r.json()["outputs"][0]["image"]["url"]
-    with open(filename, "wb") as f:
-        f.write(requests.get(img_url).content)
-    return filename
-
-def make_animated_video(topic):
-    token = get_adobe_token()
+def generate_video_with_omni(topic):
+    print(f"Omni 1.1 Flash se video bana raha hu: {topic}")
     
-    # 3 alag scene banayenge
-    prompts = [f"{topic} scene 1", f"{topic} scene 2 funny reaction", f"{topic} scene 3 climax"]
-    clips = []
-    for i, p in enumerate(prompts):
-        img_path = generate_firefly_image(p, token, f"scene_{i}.jpg")
-        # Animated effect - Ken Burns zoom
-        clip = ImageClip(img_path).set_duration(3)
-        clip = clip.resize(lambda t: 1 + 0.1*t)  # Zoom animation
-        clips.append(clip)
+    model = genai.GenerativeModel(VIDEO_MODEL_NAME)
+    
+    # Omni 1.1 Flash Video Prompt
+    prompt = f"""
+    Create a 8 second funny vertical video: {topic}
+    Character: Maudaha ka Bagad Billa, a funny desi cat wearing Bundelkhandi red gamcha
+    Style: funny, animated, vibrant, 9:16 vertical, trending YouTube Shorts style
+    """
 
-    full_clip = concatenate_videoclips(clips)
+    # Video generation call
+    response = model.generate_content(
+        prompt,
+        generation_config={"response_mime_type": "video/mp4"}
+    )
+
+    # Video save
+    with open("final.mp4", "wb") as f:
+        f.write(response.parts[0].inline_data.data)
     
-    # Funny animated text
-    txt = TextClip(topic, fontsize=70, color='yellow', font='Arial-Bold', stroke_color='black', stroke_width=3, method='caption', size=(1000, None))
-    txt = txt.set_position(('center','bottom')).set_duration(9)
-    
-    final = CompositeVideoClip([full_clip, txt])
-    final.write_videofile("final_video.mp4", fps=24)
-    return "final_video.mp4"
+    print("Video ban gayi: final.mp4")
+    return "final.mp4"
 
 def upload_to_youtube(path, title):
-    creds = Credentials(None, refresh_token=YT_REFRESH_TOKEN, token_uri="https://oauth2.googleapis.com/token", client_id=YT_CLIENT_ID, client_secret=YT_CLIENT_SECRET, scopes=["https://www.googleapis.com/auth/youtube.upload"])
+    creds = Credentials(
+        None, refresh_token=YT_REFRESH_TOKEN,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=YT_CLIENT_ID, client_secret=YT_CLIENT_SECRET,
+        scopes=["https://www.googleapis.com/auth/youtube.upload"]
+    )
     youtube = build("youtube", "v3", credentials=creds)
-    youtube.videos().insert(part="snippet,status", body={"snippet": {"title": f"{title} | Bagad Billa Funny", "description": f"{title}\n#trending #funny #maudaha #bagadbilla", "categoryId": "23"}, "status": {"privacyStatus": "public"}}, media_body=MediaFileUpload(path)).execute()
+    
+    youtube.videos().insert(
+        part="snippet,status",
+        body={
+            "snippet": {"title": title[:90], "description": f"{title}\n\n#maudaha #bagadbilla", "categoryId": "23"},
+            "status": {"privacyStatus": "public"}
+        },
+        media_body=MediaFileUpload(path)
+    ).execute()
+    print("YouTube pe upload ho gaya!")
 
 if __name__ == "__main__":
-    topic = get_trending_funny_topic()
-    print(f"TRENDING TOPIC: {topic}")
-    video = make_animated_video(topic)
+    topic = get_topic()
+    print(f"Topic: {topic}")
+    video = generate_video_with_omni(topic)
     upload_to_youtube(video, topic)
