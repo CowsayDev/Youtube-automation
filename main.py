@@ -14,11 +14,11 @@ model = genai.GenerativeModel('gemini-1.5-flash')
 trending = random.choice(["ISRO ka naya mission", "Virat Kohli ka record", "AI ne duniya badal di", "Gaon me hua chamatkar", "Paisa hi sab kuch hai?", "Dost ne dhoka de diya"])
 print(f"Trending: {trending}")
 
-# 2. SCRIPT - Sapwa style
+# 2. SCRIPT - Maudaha ka Bagad Billa style
 prompt = f"""
 Trending: {trending}
-Sapwa Bhai style me 30 sec ki emotional Hindi script banao.
-Character Blast Bhai camera se baat kar raha hai.
+Maudaha ka Bagad Billa style me 30 sec ki emotional Hindi script banao.
+Character Bagad Billa camera se baat kar raha hai.
 Pehle 2 sec me Hook: 'Bhai ruk ja...'
 Script 70 words, dil ko chhu jaye.
 Format:
@@ -34,7 +34,7 @@ try:
 except: pass
 
 open("title.txt","w",encoding="utf-8").write(title)
-open("desc.txt","w",encoding="utf-8").write(f"{title}\n\n{script}\n\n#SachKaBlast #Shorts")
+open("desc.txt","w",encoding="utf-8").write(f"{title}\n\n{script}\n\n#MaudahaKaBagadBilla #Shorts")
 open("current_script.txt","w",encoding="utf-8").write(script)
 
 # 3. VOICE - Free
@@ -43,8 +43,8 @@ tts.save("voice.mp3")
 audio = AudioFileClip("voice.mp3")
 duration = audio.duration + 0.5
 
-# 4. FREE ANIMATION - Yahi Sapwa wala jugaad hai
-# Tumhe ek baar apni Blast Bhai ki photo ko GitHub me 'character.png' naam se upload karna hai
+# 4. FREE ANIMATION - Yahi Maudaha wala jugaad hai
+# Tumhe ek baar apni Bagad Billa ki photo ko GitHub me 'character.png' naam se upload karna hai
 # Agar nahi hai to ye code khud ek cartoon bana dega
 try:
     base_img = Image.open("character.png").convert("RGB").resize((800, 800))
@@ -102,6 +102,6 @@ print("Free Animated Video Ban Gayi!")
 # 5. YOUTUBE UPLOAD - Free
 creds = Credentials(None, refresh_token=os.getenv("YT_REFRESH_TOKEN"), token_uri='https://oauth2.googleapis.com/token', client_id=os.getenv("YT_CLIENT_ID"), client_secret=os.getenv("YT_CLIENT_SECRET"), scopes=['https://www.googleapis.com/auth/youtube.upload'])
 youtube = build('youtube','v3', credentials=creds)
-body = {"snippet": {"title": title, "description": open("desc.txt").read(), "tags": ["SachKaBlast","Shorts"], "categoryId": "22"}, "status": {"privacyStatus": "public"}}
+body = {"snippet": {"title": title, "description": open("desc.txt").read(), "tags": ["MaudahaKaBagadBilla","Shorts"], "categoryId": "22"}, "status": {"privacyStatus": "public"}}
 youtube.videos().insert(part="snippet,status", body=body, media_body=MediaFileUpload("final_video.mp4")).execute()
 print("Upload Ho Gaya!")
