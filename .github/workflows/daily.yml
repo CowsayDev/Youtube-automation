@@ -1,47 +1,24 @@
-name: Daily Free AI Video
-
+name: 4 Videos Per Day
 on:
   schedule:
-    - cron: '0 15 * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
-  build:
+  upload:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-
-      - name: Install ImageMagick for Captions
-        run: sudo apt-get update && sudo apt-get install -y imagemagick
-
-      - name: Install Dependencies
+      - name: Install System Deps
+        run: sudo apt-get update && sudo apt-get install -y fonts-dejavu-core ffmpeg
+      - name: Install Python Deps
         run: pip install -r requirements.txt
-
-      - name: Generate Video with AI
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python main.py
-
-      - name: Upload to YouTube
+      - name: Run Bot
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-        run: python upload.py
-
-      - name: Create Feedback for Next Loop
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python feedback.py
-
-      - name: Save Feedback for Next Run
-        run: |
-          git config --global user.name "Auto Bot"
-          git config --global user.email "bot@autopilot.com"
-          git add last_feedback.txt || echo "no feedback"
-          git commit -m "Update feedback for next loop" || echo "no changes"
-          git push || echo "push skipped"
+        run: python main.py
