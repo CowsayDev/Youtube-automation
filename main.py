@@ -1,74 +1,107 @@
-import os
+import os, random, math, numpy as np
 import google.generativeai as genai
 from gtts import gTTS
-from moviepy.editor import ColorClip, AudioFileClip, TextClip, CompositeVideoClip
+from PIL import Image, ImageDraw
+from moviepy.editor import AudioFileClip, VideoClip, CompositeVideoClip, TextClip
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from google.oauth2.credentials import Credentials
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# 1. FEEDBACK READ
-feedback_text = "Pehli video hai"
-if os.path.exists("last_feedback.txt"):
-    with open("last_feedback.txt", "r", encoding="utf-8") as f:
-        feedback_text = f.read()
+# 1. TRENDING
+trending = random.choice(["ISRO ka naya mission", "Virat Kohli ka record", "AI ne duniya badal di", "Gaon me hua chamatkar", "Paisa hi sab kuch hai?", "Dost ne dhoka de diya"])
+print(f"Trending: {trending}")
 
-# 2. AI SE TITLE + HOOK + SCRIPT + HASHTAG EK SATH LENA
+# 2. SCRIPT - Sapwa style
 prompt = f"""
-Feedback: '{feedback_text}'.
-Mujhe ek viral YouTube Shorts ke liye 4 cheezein de, Hindi me, is format me:
-
-TITLE: (60 character se kam, viral, curiosity wala)
-HOOK_TEXT: (Video ke upar dikhne wala 3-4 shabd ka bada text, jaise '5G KA SACH!')
-SCRIPT: (40 second ki full script, Hindi me)
-HASHTAGS: (5 viral hashtags)
-
-Topic trending hona chahiye India me.
+Trending: {trending}
+Sapwa Bhai style me 30 sec ki emotional Hindi script banao.
+Character Blast Bhai camera se baat kar raha hai.
+Pehle 2 sec me Hook: 'Bhai ruk ja...'
+Script 70 words, dil ko chhu jaye.
+Format:
+TITLE: [title]
+SCRIPT: [script]
 """
-
 res = model.generate_content(prompt).text
-print(res)
-
-# 3. AI KE JAWAB KO ALAG-ALAG KARNA
+title = "Bhai Ruk Ja Ye Sun Le!"
+script = res
 try:
-    title = res.split("TITLE:")[1].split("HOOK_TEXT:")[0].strip().replace('"', '').replace('*', '')[:90]
-    hook = res.split("HOOK_TEXT:")[1].split("SCRIPT:")[0].strip().replace('"', '').replace('*', '')[:30]
-    script = res.split("SCRIPT:")[1].split("HASHTAGS:")[0].strip()
-    hashtags = res.split("HASHTAGS:")[1].strip()
-except:
-    title = "Aaj ka Viral Sach"
-    hook = "VIRAL SACH!"
-    script = res
-    hashtags = "#shorts #viral #facts #trending #india"
+    title = res.split("TITLE:")[1].split("SCRIPT:")[0].strip()
+    script = res.split("SCRIPT:")[1].strip()
+except: pass
 
-print(f"Title: {title}")
-print(f"Hook: {hook}")
+open("title.txt","w",encoding="utf-8").write(title)
+open("desc.txt","w",encoding="utf-8").write(f"{title}\n\n{script}\n\n#SachKaBlast #Shorts")
+open("current_script.txt","w",encoding="utf-8").write(script)
 
-# 4. AUDIO BANANA
+# 3. VOICE - Free
 tts = gTTS(text=script, lang='hi', slow=False)
-tts.save("audio.mp3")
-audio = AudioFileClip("audio.mp3")
+tts.save("voice.mp3")
+audio = AudioFileClip("voice.mp3")
+duration = audio.duration + 0.5
 
-# 5. VIDEO BANANA + UPAR BADA CAPTION LAGANA
-bg = ColorClip(size=(1080, 1920), color=(10, 10, 10), duration=audio.duration)
-
+# 4. FREE ANIMATION - Yahi Sapwa wala jugaad hai
+# Tumhe ek baar apni Blast Bhai ki photo ko GitHub me 'character.png' naam se upload karna hai
+# Agar nahi hai to ye code khud ek cartoon bana dega
 try:
-    txt_clip = TextClip(hook, fontsize=90, color='white', font='DejaVu-Sans-Bold', stroke_color='black', stroke_width=3, method='caption', size=(900, None))
-    txt_clip = txt_clip.set_position(('center', 400)).set_duration(audio.duration)
-    final_video = CompositeVideoClip([bg, txt_clip]).set_audio(audio)
-except Exception as e:
-    print(f"TextClip error {e}, making video without text")
-    final_video = bg.set_audio(audio)
+    base_img = Image.open("character.png").convert("RGB").resize((800, 800))
+except:
+    # Fallback - Agar photo nahi mili to ek aag ka gola bana do
+    base_img = Image.new("RGB", (800, 800), (20, 20, 40))
+    d = ImageDraw.Draw(base_img)
+    d.ellipse([150, 150, 650, 650], fill=(255, 150, 0), outline=(255, 220, 0), width=10)
+    # Aankh
+    d.ellipse([280, 300, 350, 380], fill=(255,255,255))
+    d.ellipse([450, 300, 520, 380], fill=(255,255,255))
+    d.ellipse([305, 330, 335, 360], fill=(0,0,0))
+    d.ellipse([475, 330, 505, 360], fill=(0,0,0))
 
-final_video.write_videofile("final_video.mp4", fps=24, codec='libx264', audio_codec='aac')
+W, H = 1080, 1920
+# Background - Gaon jaisa
+bg = Image.new("RGB", (W, H), (30, 80, 30))
+bg_draw = ImageDraw.Draw(bg)
+bg_draw.rectangle([0, 1400, W, H], fill=(120, 70, 20)) # Zameen
 
-# 6. TITLE AUR DESCRIPTION SAVE KARNA
-with open("title.txt", "w", encoding="utf-8") as f:
-    f.write(title)
+def make_frame(t):
+    frame = bg.copy()
+    # Character hilna - upar neeche (Body Bob)
+    bob = int(math.sin(t * 4) * 15)
+    # Muh khulna-band hona - jab voice chal rahi hai
+    mouth_open = int(abs(math.sin(t * 8)) * 30) if t < duration - 0.5 else 5
+    # Aankh jhapakna - har 3 sec me
+    blink = 1 if (t % 3) < 0.15 else 0
 
-with open("desc.txt", "w", encoding="utf-8") as f:
-    f.write(f"{script}\n\n{hashtags}")
+    char = base_img.copy()
+    # Muh banao - character ke neeche
+    draw = ImageDraw.Draw(char)
+    # Muh ko mita kar naya muh banao
+    draw.ellipse([320, 550, 480, 550 + mouth_open + 10], fill=(0,0,0))
+    if blink:
+        draw.rectangle([280, 300, 520, 380], fill=(255,150,0)) # Aankh band
 
-with open("current_script.txt", "w", encoding="utf-8") as f:
-    f.write(script)
+    # Character ko frame me chipkao
+    frame.paste(char, (140, 600 + bob))
+    # Upar Title
+    return np.array(frame)
 
-print("Video ban gayi!")
+video = VideoClip(make_frame, duration=duration)
+# Title Text
+txt = TextClip(title, fontsize=65, color='yellow', size=(950, None), method='caption', align='center', font='DejaVu-Sans-Bold')
+txt = txt.set_position(('center', 200)).set_duration(duration)
+# Neeche Subscribe
+sub = TextClip("SUBSCRIBE KARO 👇", fontsize=55, color='white', font='DejaVu-Sans-Bold')
+sub = sub.set_position(('center', 1750)).set_duration(duration)
+
+final = CompositeVideoClip([video, txt, sub]).set_audio(audio)
+final.write_videofile("final_video.mp4", fps=24, codec="libx264", audio_codec="aac")
+print("Free Animated Video Ban Gayi!")
+
+# 5. YOUTUBE UPLOAD - Free
+creds = Credentials(None, refresh_token=os.getenv("YT_REFRESH_TOKEN"), token_uri='https://oauth2.googleapis.com/token', client_id=os.getenv("YT_CLIENT_ID"), client_secret=os.getenv("YT_CLIENT_SECRET"), scopes=['https://www.googleapis.com/auth/youtube.upload'])
+youtube = build('youtube','v3', credentials=creds)
+body = {"snippet": {"title": title, "description": open("desc.txt").read(), "tags": ["SachKaBlast","Shorts"], "categoryId": "22"}, "status": {"privacyStatus": "public"}}
+youtube.videos().insert(part="snippet,status", body=body, media_body=MediaFileUpload("final_video.mp4")).execute()
+print("Upload Ho Gaya!")
