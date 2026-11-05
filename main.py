@@ -8,7 +8,7 @@ from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-1.5-Pro')
+model = genai.GenerativeModel('gemini-1.5-pro')
 
 # 1. TRENDING
 trending = random.choice(["ISRO ka naya mission", "Virat Kohli ka record", "AI ne duniya badal di", "Gaon me hua chamatkar", "Paisa hi sab kuch hai?", "Dost ne dhoka de diya"])
